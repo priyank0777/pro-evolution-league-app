@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2v2 eFootball League | Tournament Management Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        efnavy: '#070b19',
+                        efcard: '#111827',
+                        efaccent: '#00f59b',
+                        efblue: '#2563eb'
+                    }
+                }
+            }
+        };
+    </script>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body class="min-h-screen flex flex-col bg-[#070b19] text-slate-100 selection:bg-emerald-400 selection:text-slate-950">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- Top Header & Navigation -->
+    <header class="sticky top-0 z-40 border-b border-slate-800/80 bg-[#070b19]/90 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Brand Logo -->
+                <div class="flex items-center gap-3 cursor-pointer" onclick="app.navigate('dashboard')">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-blue-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 font-extrabold text-slate-950 text-lg">
+                        2v2
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-extrabold tracking-tight text-lg text-white">eFootball</span>
+                            <span class="text-xs font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Pro League</span>
+                        </div>
+                        <p id="header-phase-subtitle" class="text-xs text-slate-400">2v2 Co-Op Championship</p>
+                    </div>
+                </div>
+
+                <!-- Right User Pill / Auth Status -->
+                <div id="header-user-area" class="flex items-center gap-3">
+                    <!-- Populated dynamically by app.js -->
+                </div>
+            </div>
+
+            <!-- Main Navigation Tabs (Visible when logged in) -->
+            <nav id="main-nav" class="hidden flex items-center gap-1 overflow-x-auto py-2 border-t border-slate-800/60 text-sm font-medium">
+                <button data-nav="dashboard" onclick="app.navigate('dashboard')" class="nav-btn px-3.5 py-2 rounded-lg whitespace-nowrap transition">
+                    Dashboard
+                </button>
+                <button id="nav-preferences" data-nav="preferences" onclick="app.navigate('preferences')" class="nav-btn hidden px-3.5 py-2 rounded-lg whitespace-nowrap transition">
+                    Partner Preferences
+                </button>
+                <button id="nav-my-team" data-nav="my-team" onclick="app.navigate('my-team')" class="nav-btn hidden px-3.5 py-2 rounded-lg whitespace-nowrap transition">
+                    My Team
+                </button>
+                <button data-nav="fixtures" onclick="app.navigate('fixtures')" class="nav-btn px-3.5 py-2 rounded-lg whitespace-nowrap transition">
+                    All Fixtures
+                </button>
+                <button data-nav="standings" onclick="app.navigate('standings')" class="nav-btn px-3.5 py-2 rounded-lg whitespace-nowrap transition">
+                    Standings
+                </button>
+                <button data-nav="teams" onclick="app.navigate('teams')" class="nav-btn px-3.5 py-2 rounded-lg whitespace-nowrap transition">
+                    Team Directory
+                </button>
+                <button data-nav="leaderboard" onclick="app.navigate('leaderboard')" class="nav-btn px-3.5 py-2 rounded-lg whitespace-nowrap transition">
+                    Player Stats (MVP)
+                </button>
+                <button id="nav-admin" data-nav="admin" onclick="app.navigate('admin')" class="nav-btn hidden px-3.5 py-2 rounded-lg whitespace-nowrap transition text-amber-400 border border-amber-500/30 bg-amber-500/10">
+                    Admin Control
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- Global Tournament Phase Banner -->
+        <div id="phase-banner" class="hidden mb-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 flex flex-wrap items-center justify-between gap-4">
+            <!-- Populated dynamically by app.js -->
+        </div>
+
+        <!-- =============================================================== -->
+        <!-- 1. AUTH VIEW (Login & Registration)                             -->
+        <!-- =============================================================== -->
+        <section id="view-auth" class="hidden max-w-md mx-auto my-8">
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl p-6 sm:p-8">
+                <div class="text-center mb-6">
+                    <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-blue-600 text-slate-950 font-black text-2xl mb-3 shadow-lg shadow-emerald-500/20">
+                        2v2
+                    </div>
+                    <h1 class="text-2xl font-bold text-white">eFootball League Portal</h1>
+                    <p class="text-sm text-slate-400 mt-1">Sign in or register for the 2v2 Co-Op Championship</p>
+                </div>
+
+                <!-- Auth Mode Switcher -->
+                <div class="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-950 border border-slate-800 mb-6">
+                    <button id="tab-login-btn" onclick="app.switchAuthTab('login')" class="py-2 text-sm font-semibold rounded-lg bg-emerald-500 text-slate-950 transition">
+                        Sign In
+                    </button>
+                    <button id="tab-register-btn" onclick="app.switchAuthTab('register')" class="py-2 text-sm font-semibold rounded-lg text-slate-400 hover:text-white transition">
+                        Player Sign Up
+                    </button>
+                </div>
+
+                <!-- Login Form -->
+                <form id="form-login" onsubmit="app.handleLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">eFootball Username</label>
+                        <input id="login-username" type="text" required placeholder="e.g. pro_striker99"
+                            class="w-full rounded-xl bg-slate-950 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Password</label>
+                        <input id="login-password" type="password" required placeholder="••••••••"
+                            class="w-full rounded-xl bg-slate-950 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <button type="submit" class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+                        Sign In to League
+                    </button>
+                </form>
+
+                <!-- Register Form -->
+                <form id="form-register" onsubmit="app.handleRegister(event)" class="hidden space-y-4">
+                    <div id="register-closed-notice" class="hidden rounded-xl bg-rose-500/10 border border-rose-500/30 p-3 text-xs text-rose-300">
+                        Registration is currently closed by the League Administrator.
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Full Name / Display Name</label>
+                        <input id="reg-name" type="text" required minlength="2" placeholder="e.g. Alex Rivera"
+                            class="w-full rounded-xl bg-slate-950 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">eFootball Username</label>
+                        <input id="reg-username" type="text" required minlength="2" placeholder="e.g. alex_efootball"
+                            class="w-full rounded-xl bg-slate-950 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Password</label>
+                        <input id="reg-password" type="password" required minlength="4" placeholder="Minimum 4 characters"
+                            class="w-full rounded-xl bg-slate-950 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <button id="reg-submit-btn" type="submit" class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+                        Complete Registration
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- 2. USER DASHBOARD VIEW                                          -->
+        <!-- =============================================================== -->
+        <section id="view-dashboard" class="spa-view hidden space-y-6">
+            <div id="dashboard-summary-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Populated by app.js -->
+            </div>
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-white">My Active Matchweek Fixtures</h2>
+                        <p class="text-sm text-slate-400">Matches run Friday to Friday (midnight). Unplayed matches automatically draw 0–0.</p>
+                    </div>
+                    <button onclick="app.loadDashboard()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition">
+                        Refresh Fixtures
+                    </button>
+                </div>
+                <div id="dashboard-fixtures-list" class="space-y-4">
+                    <!-- Populated by app.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- 3. PREFERENCES PAGE (Partner Ranking)                           -->
+        <!-- =============================================================== -->
+        <section id="view-preferences" class="spa-view hidden space-y-6">
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            Phase 2: Partner Matchmaking
+                        </span>
+                        <h2 class="text-2xl font-bold text-white mt-2">Rank Your Preferred 2v2 Partners</h2>
+                        <p class="text-sm text-slate-400 mt-1">
+                            Drag and drop players (or use the up/down arrows) to rank everyone from <strong class="text-emerald-400">#1 Most Preferred Partner</strong> to least preferred.
+                        </p>
+                    </div>
+                    <button id="save-preferences-btn" onclick="app.savePreferences()" class="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+                        Save Partner Rankings
+                    </button>
+                </div>
+
+                <div id="preferences-list" class="space-y-2.5 max-w-2xl">
+                    <!-- Populated by app.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- 4. MY TEAM PAGE                                                 -->
+        <!-- =============================================================== -->
+        <section id="view-my-team" class="spa-view hidden space-y-6">
+            <div id="my-team-container" class="max-w-2xl mx-auto">
+                <!-- Populated by app.js -->
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- 5. ALL FIXTURES VIEW                                            -->
+        <!-- =============================================================== -->
+        <section id="view-fixtures" class="spa-view hidden space-y-6">
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">Season Fixtures & Results</h2>
+                        <p class="text-sm text-slate-400">Complete schedule separated by Matchweek</p>
+                    </div>
+                    <div id="fixtures-mw-filter" class="flex items-center gap-1.5 flex-wrap">
+                        <!-- Matchweek filter pills -->
+                    </div>
+                </div>
+                <div id="all-fixtures-container" class="space-y-8">
+                    <!-- Populated by app.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- 6. STANDINGS VIEW (Premier League Table)                        -->
+        <!-- =============================================================== -->
+        <section id="view-standings" class="spa-view hidden space-y-6">
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 overflow-hidden">
+                <div class="p-6 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">League Standings</h2>
+                        <p class="text-sm text-slate-400">3 pts Win • 1 pt Draw • 0 pts Loss | Tie-breakers: Goal Difference (GD), then Head-to-Head</p>
+                    </div>
+                    <button onclick="app.loadStandings()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition">
+                        Refresh Table
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-800 bg-slate-950/60 text-xs font-bold uppercase tracking-wider text-slate-400">
+                                <th class="py-3.5 px-4 w-14 text-center">Pos</th>
+                                <th class="py-3.5 px-4">Club / 2v2 Team</th>
+                                <th class="py-3.5 px-3 text-center">P</th>
+                                <th class="py-3.5 px-3 text-center">W</th>
+                                <th class="py-3.5 px-3 text-center">D</th>
+                                <th class="py-3.5 px-3 text-center">L</th>
+                                <th class="py-3.5 px-3 text-center">GF</th>
+                                <th class="py-3.5 px-3 text-center">GA</th>
+                                <th class="py-3.5 px-3 text-center">GD</th>
+                                <th class="py-3.5 px-4 text-center text-emerald-400">PTS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="standings-tbody" class="divide-y divide-slate-800/60 text-sm">
+                            <!-- Populated by app.js -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- 7. TEAM DIRECTORY VIEW                                          -->
+        <!-- =============================================================== -->
+        <section id="view-teams" class="spa-view hidden space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-white">2v2 Team Directory</h2>
+                    <p class="text-sm text-slate-400">Official roster of all paired co-op squads and team captains</p>
+                </div>
+            </div>
+            <div id="team-directory-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Populated by app.js -->
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- 8. PLAYER STATS (MVP LEADERBOARD) VIEW                          -->
+        <!-- =============================================================== -->
+        <section id="view-leaderboard" class="spa-view hidden space-y-6">
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 overflow-hidden">
+                <div class="p-6 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">Individual Player Stats (MVP Leaderboard)</h2>
+                        <p class="text-sm text-slate-400">Ranked by cumulative match performance across official fixtures</p>
+                    </div>
+                    <button onclick="app.loadLeaderboard()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition">
+                        Refresh Leaderboard
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead id="leaderboard-thead">
+                            <!-- Populated dynamically based on tracked stats -->
+                        </thead>
+                        <tbody id="leaderboard-tbody" class="divide-y divide-slate-800/60 text-sm">
+                            <!-- Populated by app.js -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================================== -->
+        <!-- 9. ADMIN DASHBOARD VIEW                                         -->
+        <!-- =============================================================== -->
+        <section id="view-admin" class="spa-view hidden space-y-8">
+            <div class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6">
+                <h2 class="text-2xl font-bold text-amber-400">Commissioner Admin Control Center</h2>
+                <p class="text-sm text-slate-300 mt-1">
+                    Manage tournament lifecycle phases, run partner matchmaking, generate round-robin schedules, resolve disputes, and retroactively override any match or player stat.
+                </p>
+            </div>
+
+            <!-- Grid: Phase Toggles & Tournament Engine Actions -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- System Phase & Stat Toggles -->
+                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 space-y-5">
+                    <h3 class="text-lg font-bold text-white border-b border-slate-800 pb-3">1. System Phase & Stat Tracking Toggles</h3>
+                    <div id="admin-toggles-container" class="space-y-4">
+                        <!-- Populated by app.js -->
+                    </div>
+                </div>
+
+                <!-- Matchmaking, Fixture Generator & Weekly Lifecycle -->
+                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 space-y-6">
+                    <h3 class="text-lg font-bold text-white border-b border-slate-800 pb-3">2. Tournament Engine & Matchweek Controls</h3>
+                    <div id="admin-engine-controls" class="space-y-5">
+                        <!-- Populated by app.js -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dispute Resolution Queue -->
+            <div class="rounded-2xl border border-rose-500/30 bg-slate-900/70 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-rose-400">3. Flagged Match Disputes</h3>
+                        <p class="text-xs text-slate-400">Matches disputed by the Away team requiring Commissioner review and score override</p>
+                    </div>
+                    <span id="admin-dispute-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300">0</span>
+                </div>
+                <div id="admin-disputes-list" class="space-y-3">
+                    <!-- Populated by app.js -->
+                </div>
+            </div>
+
+            <!-- Retroactive Match & Stat Override Manager -->
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">4. Retroactive Match & Player Stat Override</h3>
+                        <p class="text-xs text-slate-400">Edit any match score, status, or individual player stats from any matchweek at any time.</p>
+                    </div>
+                    <select id="admin-match-mw-filter" onchange="app.renderAdminMatchesTable()" class="rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-white">
+                        <option value="all">All Matchweeks</option>
+                    </select>
+                </div>
+                <div id="admin-matches-list" class="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+                    <!-- Populated by app.js -->
+                </div>
+            </div>
+
+            <!-- User Management Table -->
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">5. Registered Players & User Management</h3>
+                        <p class="text-xs text-slate-400">Delete duplicate or erroneous user registrations prior to matchmaking.</p>
+                    </div>
+                    <span id="admin-user-count" class="text-xs font-semibold text-emerald-400"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-xs uppercase text-slate-400">
+                                <th class="py-3 px-4">ID</th>
+                                <th class="py-3 px-4">Name</th>
+                                <th class="py-3 px-4">eFootball Username</th>
+                                <th class="py-3 px-4">Role</th>
+                                <th class="py-3 px-4">Assigned Team</th>
+                                <th class="py-3 px-4 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-tbody" class="divide-y divide-slate-800/60">
+                            <!-- Populated by app.js -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- =================================================================== -->
+    <!-- MODAL: SUBMIT / OVERRIDE SCORE & PLAYER STATS                       -->
+    <!-- =================================================================== -->
+    <div id="modal-score" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl overflow-hidden my-8">
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <h3 id="modal-score-title" class="text-lg font-bold text-white">Submit Match Result & Player Stats</h3>
+                <button onclick="app.closeScoreModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <form id="form-score-modal" onsubmit="app.handleScoreModalSubmit(event)" class="p-6 space-y-6">
+                <input type="hidden" id="modal-match-id" />
+                <input type="hidden" id="modal-mode" value="home_submit" />
+
+                <!-- Team Score Inputs -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center bg-slate-950/90 p-4 rounded-xl border border-slate-800">
+                    <div class="text-center">
+                        <p class="text-xs uppercase font-bold text-emerald-400 mb-1">Home Team</p>
+                        <p id="modal-home-team-name" class="font-bold text-white text-sm mb-2 truncate"></p>
+                        <input id="modal-home-score" type="number" min="0" max="99" required value="0"
+                            class="w-24 text-center font-mono-num text-2xl font-extrabold rounded-xl bg-slate-900 border border-slate-700 py-2 text-white focus:border-emerald-400 focus:outline-none" />
+                    </div>
+                    <div class="text-center font-extrabold text-slate-500 text-lg">VS</div>
+                    <div class="text-center">
+                        <p class="text-xs uppercase font-bold text-blue-400 mb-1">Away Team</p>
+                        <p id="modal-away-team-name" class="font-bold text-white text-sm mb-2 truncate"></p>
+                        <input id="modal-away-score" type="number" min="0" max="99" required value="0"
+                            class="w-24 text-center font-mono-num text-2xl font-extrabold rounded-xl bg-slate-900 border border-slate-700 py-2 text-white focus:border-emerald-400 focus:outline-none" />
+                    </div>
+                </div>
+
+                <!-- Admin Status Selector (Only visible in Admin Override mode) -->
+                <div id="modal-admin-status-wrap" class="hidden">
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-amber-400 mb-1.5">Match Status (Admin Override)</label>
+                    <select id="modal-admin-status" class="w-full rounded-xl bg-slate-950 border border-slate-800 px-4 py-2.5 text-sm text-white">
+                        <option value="accepted">Accepted (Official Final Result)</option>
+                        <option value="submitted">Submitted (Awaiting Away Verification)</option>
+                        <option value="pending">Pending (Unplayed)</option>
+                        <option value="disputed">Disputed</option>
+                        <option value="auto_drawn">Auto-Drawn (0-0 Unplayed Deadline)</option>
+                    </select>
+                </div>
+
+                <!-- Individual Player Stats Table -->
+                <div id="modal-player-stats-section" class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-sm font-bold text-slate-200">Individual Player Performance Stats</h4>
+                        <span class="text-xs text-slate-400">Points are typically in the 1000s (e.g., 1450)</span>
+                    </div>
+                    <div id="modal-player-stats-rows" class="space-y-2.5">
+                        <!-- Populated dynamically for all 4 match players -->
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+                    <button type="button" onclick="app.closeScoreModal()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20">
+                        Save Match Result
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- MODAL: AWAY TEAM VERIFY (ACCEPT OR DISPUTE)                         -->
+    <!-- =================================================================== -->
+    <div id="modal-verify" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl overflow-hidden my-8">
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-white">Verify Submitted Match Result</h3>
+                <button onclick="app.closeVerifyModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <div id="modal-verify-body" class="p-6 space-y-5">
+                <!-- Populated by app.js -->
+            </div>
+        </div>
+    </div>
+
+    <footer class="border-t border-slate-800/70 py-5 text-center text-xs text-slate-500 mt-12">
+        2v2 eFootball League Tournament Management System • Built with FastAPI, SQLAlchemy & Vanilla JS
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+

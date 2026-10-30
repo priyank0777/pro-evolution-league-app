@@ -1,0 +1,66 @@
+/* Custom styling for 2v2 eFootball League SPA */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+:root {
+    --ef-navy: #070b19;
+    --ef-card: #111827;
+    --ef-accent: #00f59b;
+    --ef-blue: #2563eb;
+    --ef-yellow: #facc15;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #070b19;
+    color: #f3f4f6;
+}
+
+.font-mono-num {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Drag and drop preference cards */
+.pref-item {
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    user-select: none;
+}
+
+.pref-item.dragging {
+    opacity: 0.45;
+    transform: scale(0.99);
+    border-color: #00f59b !important;
+}
+
+.pref-item.drag-over {
+    border-top: 2px solid #00f59b !important;
+    background-color: rgba(0, 245, 155, 0.08) !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0b1120;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+}
+
+/* Toggle Switch */
+.toggle-checkbox:checked {
+    right: 0;
+    border-color: #00f59b;
+}
+.toggle-checkbox:checked + .toggle-label {
+    background-color: #059669;
+}
+
