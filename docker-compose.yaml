@@ -1,0 +1,15 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: efootball_league_app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Mount SQLite database file to persist data on the host machine
+      - ./efootball_league.db:/app/efootball_league.db
+    restart: unless-stopped
+

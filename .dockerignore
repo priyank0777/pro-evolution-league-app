@@ -1,0 +1,10 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+efootball_league.db
+.git
+.gitignore
+
