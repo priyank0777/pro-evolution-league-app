@@ -145,8 +145,9 @@ const app = {
             phaseDesc = 'Visit "My Team" to customize your Team Name and designate your Team Leader (Captain).';
             badgeColor = 'bg-amber-500/15 text-amber-400 border-amber-500/30';
         } else if (s.season_live) {
+            const mpw = s.matches_per_week || 1;
             phaseTitle = `Live Season — Matchweek ${s.current_matchweek}`;
-            phaseDesc = `Round-Robin (${s.round_robin_multiplier}x) is live! Home team submits scores; Away team verifies before Friday midnight.`;
+            phaseDesc = `Round-Robin (${s.round_robin_multiplier}x • ${mpw} match${mpw > 1 ? 'es' : ''}/team/week) is live! Home team submits scores; Away team verifies before Friday midnight.`;
             badgeColor = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
         }
 
@@ -397,7 +398,7 @@ const app = {
                 <p class="text-xs text-slate-400 mt-0.5">
                     ${this.settings && this.settings.preferences_open && !this.user.is_admin
                         ? `<button onclick="app.navigate('preferences')" class="text-blue-400 hover:underline font-semibold">Submit Partner Preferences &rarr;</button>`
-                        : 'Friday-to-Friday Weekly Cycle'}
+                        : `${this.settings ? (this.settings.matches_per_week || 1) : 1} match${this.settings && (this.settings.matches_per_week || 1) > 1 ? 'es' : ''}/team/week • Friday-to-Friday Cycle`}
                 </p>
             </div>
         `;
@@ -1215,9 +1216,11 @@ const app = {
 
             <!-- Step B: Fixture Generator -->
             <div class="rounded-xl bg-slate-950/80 border border-slate-800 p-4 space-y-3">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-2">
                     <span class="text-xs font-bold uppercase text-blue-400">Step B: Season Fixture Generator</span>
-                    <div class="flex items-center gap-2">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="flex items-center justify-between gap-2">
                         <label class="text-xs text-slate-400">Format Multiplier:</label>
                         <select id="admin-rr-multiplier" class="rounded-lg bg-slate-900 border border-slate-700 px-2.5 py-1 text-xs text-white font-bold">
                             <option value="1" ${s.round_robin_multiplier === 1 ? 'selected' : ''}>1x (Single Round-Robin)</option>
@@ -1225,6 +1228,11 @@ const app = {
                             <option value="3" ${s.round_robin_multiplier === 3 ? 'selected' : ''}>3x (Triple Round-Robin)</option>
                             <option value="4" ${s.round_robin_multiplier === 4 ? 'selected' : ''}>4x (Quadruple Round-Robin)</option>
                         </select>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <label class="text-xs text-slate-400">Matches / Team / Week:</label>
+                        <input id="admin-matches-per-week-gen" type="number" min="1" max="10" value="${s.matches_per_week || 1}"
+                            class="w-16 rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-xs font-mono-num text-center text-white font-bold" />
                     </div>
                 </div>
                 <button onclick="app.adminGenerateFixtures()"
@@ -1235,7 +1243,7 @@ const app = {
 
             <!-- Step C: Active Matchweek & Friday Auto-Draw -->
             <div class="rounded-xl bg-slate-950/80 border border-slate-800 p-4 space-y-3">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-2">
                     <span class="text-xs font-bold uppercase text-amber-400">Step C: Weekly Cycle & Friday Auto-Draws</span>
                     <div class="flex items-center gap-2">
                         <label class="text-xs text-slate-400">Active Matchweek:</label>
@@ -1243,6 +1251,19 @@ const app = {
                             class="w-16 rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-xs font-mono-num text-center text-white" />
                         <button onclick="app.adminUpdateMatchweek()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-emerald-400">
                             Set MW
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/70">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-200">Matches Per Team Per Week</p>
+                        <p class="text-[11px] text-slate-400">Applies to all remaining unplayed matchweeks until changed again.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input id="admin-matches-per-week-input" type="number" min="1" max="10" value="${s.matches_per_week || 1}"
+                            class="w-16 rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-xs font-mono-num text-center text-white" />
+                        <button onclick="app.adminUpdateMatchesPerWeek()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-emerald-400">
+                            Set Pace
                         </button>
                     </div>
                 </div>
@@ -1272,10 +1293,18 @@ const app = {
 
     async adminGenerateFixtures() {
         const mult = parseInt(document.getElementById('admin-rr-multiplier').value, 10);
+        const mpw = parseInt(document.getElementById('admin-matches-per-week-gen').value, 10);
+        if (isNaN(mpw) || mpw < 1 || mpw > 10) {
+            this.toast('Matches per week must be between 1 and 10.', 'error');
+            return;
+        }
         try {
             const res = await this.api('/api/admin/fixtures/generate', {
                 method: 'POST',
-                body: JSON.stringify({ round_robin_multiplier: mult }),
+                body: JSON.stringify({
+                    round_robin_multiplier: mult,
+                    matches_per_week: mpw,
+                }),
             });
             this.toast(res.detail, 'success');
             await this.loadAdminDashboard();
@@ -1287,6 +1316,27 @@ const app = {
     async adminUpdateMatchweek() {
         const mw = parseInt(document.getElementById('admin-current-mw-input').value, 10);
         await this.toggleSystemSetting('current_matchweek', mw);
+    },
+
+    async adminUpdateMatchesPerWeek() {
+        const mpw = parseInt(document.getElementById('admin-matches-per-week-input').value, 10);
+        if (isNaN(mpw) || mpw < 1 || mpw > 10) {
+            this.toast('Matches per week must be between 1 and 10.', 'error');
+            return;
+        }
+        try {
+            this.settings = await this.api('/api/admin/settings', {
+                method: 'PUT',
+                body: JSON.stringify({ matches_per_week: mpw }),
+            });
+            this.toast(
+                `Updated to ${mpw} match${mpw > 1 ? 'es' : ''} per team per week for remaining matchweeks.`,
+                'success'
+            );
+            await this.loadAdminDashboard();
+        } catch (err) {
+            this.toast(err.message, 'error');
+        }
     },
 
     async adminTriggerAutoDraw(forceCurrentMw) {

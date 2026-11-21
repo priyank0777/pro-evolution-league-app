@@ -116,6 +116,7 @@ def get_system_settings_model(db: Session) -> SystemSettingsOut:
         team_setup_open=as_bool("team_setup_open", False),
         season_live=as_bool("season_live", False),
         round_robin_multiplier=as_int("round_robin_multiplier", 2),
+        matches_per_week=as_int("matches_per_week", 1),
         current_matchweek=as_int("current_matchweek", 1),
         track_points=as_bool("track_points", True),
         track_goals=as_bool("track_goals", True),

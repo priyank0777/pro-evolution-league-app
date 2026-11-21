@@ -12,6 +12,7 @@ DEFAULT_SYSTEM_SETTINGS = {
     "team_setup_open": "false",
     "season_live": "false",
     "round_robin_multiplier": "2",
+    "matches_per_week": "1",
     "current_matchweek": "1",
     "track_points": "true",
     "track_goals": "true",

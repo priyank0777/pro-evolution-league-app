@@ -178,6 +178,7 @@ class SystemSettingsOut(BaseModel):
     team_setup_open: bool
     season_live: bool
     round_robin_multiplier: int
+    matches_per_week: int
     current_matchweek: int
     track_points: bool
     track_goals: bool
@@ -190,6 +191,7 @@ class SystemSettingsUpdateIn(BaseModel):
     team_setup_open: Optional[bool] = None
     season_live: Optional[bool] = None
     round_robin_multiplier: Optional[int] = Field(default=None, ge=1, le=10)
+    matches_per_week: Optional[int] = Field(default=None, ge=1, le=10)
     current_matchweek: Optional[int] = Field(default=None, ge=1)
     track_points: Optional[bool] = None
     track_goals: Optional[bool] = None
@@ -198,5 +200,6 @@ class SystemSettingsUpdateIn(BaseModel):
 
 class GenerateFixturesIn(BaseModel):
     round_robin_multiplier: Optional[int] = Field(default=None, ge=1, le=10)
+    matches_per_week: Optional[int] = Field(default=None, ge=1, le=10)
     start_friday_iso: Optional[str] = None
 

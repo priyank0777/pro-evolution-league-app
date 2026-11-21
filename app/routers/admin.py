@@ -25,6 +25,7 @@ from app.services.matchmaking import run_partner_matchmaking
 from app.services.scheduler import (
     enforce_expired_match_deadlines,
     generate_round_robin_fixtures,
+    reschedule_remaining_fixtures,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["Admin Controls"])
@@ -53,7 +54,16 @@ def admin_update_settings(
         else:
             update_system_setting(db, key, str(val))
     db.commit()
-    return get_system_settings_model(db)
+
+    updated_settings = get_system_settings_model(db)
+    if "matches_per_week" in updates:
+        reschedule_remaining_fixtures(
+            db,
+            matches_per_week=updated_settings.matches_per_week,
+            current_matchweek=updated_settings.current_matchweek,
+        )
+
+    return updated_settings
 
 
 @router.get("/users", response_model=List[UserOut])
@@ -139,6 +149,11 @@ def admin_generate_season_fixtures(
         if payload.round_robin_multiplier is not None
         else sys_settings.round_robin_multiplier
     )
+    matches_per_week = (
+        payload.matches_per_week
+        if payload.matches_per_week is not None
+        else sys_settings.matches_per_week
+    )
 
     start_friday: Optional[datetime] = None
     if payload.start_friday_iso:
@@ -154,7 +169,10 @@ def admin_generate_season_fixtures(
 
     try:
         matches = generate_round_robin_fixtures(
-            db, multiplier=multiplier, start_friday_deadline=start_friday
+            db,
+            multiplier=multiplier,
+            matches_per_week=matches_per_week,
+            start_friday_deadline=start_friday,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -163,15 +181,20 @@ def admin_generate_season_fixtures(
         )
 
     update_system_setting(db, "round_robin_multiplier", str(multiplier))
+    update_system_setting(db, "matches_per_week", str(matches_per_week))
     update_system_setting(db, "current_matchweek", "1")
     update_system_setting(db, "season_live", "true")
     db.commit()
 
     max_mw = max((m.matchweek for m in matches), default=1)
     return {
-        "detail": f"Generated {len(matches)} fixtures across {max_mw} matchweeks (Multiplier: {multiplier}x).",
+        "detail": (
+            f"Generated {len(matches)} fixtures across {max_mw} matchweeks "
+            f"(Multiplier: {multiplier}x, {matches_per_week} match(es)/team/week)."
+        ),
         "total_matches": len(matches),
         "total_matchweeks": max_mw,
+        "matches_per_week": matches_per_week,
         "settings": get_system_settings_model(db),
     }
 
