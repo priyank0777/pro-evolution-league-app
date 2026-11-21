@@ -280,6 +280,28 @@ const app = {
         else if (view === 'admin') await this.loadAdminDashboard();
     },
 
+    async refreshCurrentView(btnEl = null) {
+        if (!this.user) return;
+        const originalText = btnEl ? btnEl.textContent : null;
+        if (btnEl) {
+            btnEl.disabled = true;
+            btnEl.classList.add('opacity-60', 'cursor-wait');
+            btnEl.textContent = 'Refreshing...';
+        }
+        try {
+            await this.navigate(this.currentView);
+            this.toast('Page data refreshed.', 'info');
+        } catch (err) {
+            this.toast(err.message || 'Failed to refresh data.', 'error');
+        } finally {
+            if (btnEl && btnEl.isConnected) {
+                btnEl.disabled = false;
+                btnEl.classList.remove('opacity-60', 'cursor-wait');
+                btnEl.textContent = originalText;
+            }
+        }
+    },
+
     // -----------------------------------------------------------------------
     // 1. Authentication View
     // -----------------------------------------------------------------------
@@ -637,16 +659,21 @@ const app = {
 
             container.innerHTML = `
                 <div class="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 sm:p-8 space-y-6">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
                         <div>
                             <span class="text-xs font-bold uppercase px-2.5 py-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                                 2v2 Paired Squad
                             </span>
                             <h2 class="text-2xl font-extrabold text-white mt-2">${this.escapeHtml(team.name)}</h2>
                         </div>
-                        <div class="text-right">
-                            <p class="text-xs text-slate-400">Team Captain</p>
-                            <p class="text-sm font-bold text-amber-400">👑 ${this.escapeHtml(team.leader_name || 'Unassigned')}</p>
+                        <div class="flex items-center gap-3">
+                            <div class="text-right">
+                                <p class="text-xs text-slate-400">Team Captain</p>
+                                <p class="text-sm font-bold text-amber-400">👑 ${this.escapeHtml(team.leader_name || 'Unassigned')}</p>
+                            </div>
+                            <button onclick="app.refreshCurrentView(this)" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition">
+                                ↻ Refresh Team
+                            </button>
                         </div>
                     </div>
 
