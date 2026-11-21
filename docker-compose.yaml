@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: priyank0777/efootball-league:latest
     container_name: efootball_league_app
     ports:
       - "8000:8000"
