@@ -16,9 +16,9 @@ Follow these steps in order from start to finish of a season:
 6. **Phase 5 — Generate Fixtures & Go Live:** Turn **Team Setup Phase Open = OFF**, then in **Section 2 → Step B**, choose your **Format Multiplier** (e.g., `2x` Home & Away) and **Matches / Team / Week** (e.g., `2`), and click **Generate Entire Season Fixtures**. The season goes live at Matchweek 1.
 7. **Weekly Season Loop (Every Week):**
    - Home teams play and submit scores + player stats.
-   - Away teams log in to **Accept** or **Dispute** submitted scores before Friday midnight.
+   - Away teams log in to **Accept** or **Dispute** submitted scores before the weekly cutoff (default: **Thursday `23:59:59` IST**).
    - Resolve any flagged disputes in **Section 3**.
-   - After Friday midnight (or once all matches in the week are finished), run **Check Expired Deadlines** (or **Force 0-0 Unplayed**) and increment **Active Matchweek** (`Set MW`) to the next week.
+   - After the weekly cutoff passes, unplayed matches are automatically converted to `0-0` **Auto-Drawn** and **Active Matchweek** advances automatically (or you can run **Check Expired Deadlines** / **Force 0-0 Unplayed** and **Set MW** manually).
 
 > **Tip:** Use the **↻ Refresh Admin Panel** button at the top right of the Admin page at any time to pull fresh disputes, scores, and user registrations without reloading the browser.
 
@@ -71,34 +71,40 @@ Clicking **ON / OFF** next to any toggle takes effect immediately across the ent
   - **Format Multiplier (`1x` – `4x`):** How many times every team plays every other team (`1x` = Single Round-Robin, `2x` = Home & Away, `3x` = Triple, `4x` = Quadruple). Home/Away flips automatically on each cycle.
   - **Matches / Team / Week (`1` – `10`):** How many matches each team is scheduled to play per week (e.g., `2` = every team plays 2 matches every week until changed).
 - **What it does:**
-  - **Deletes all existing matches and player stats**, then generates a fresh full-season schedule with Friday 23:59:59 UTC deadlines spaced 7 days apart.
+  - **Deletes all existing matches and player stats**, then generates a fresh full-season schedule using your configured **Week End Cutoff (IST)** (default: **Thursday `23:59:59` IST**, stored in UTC), spaced 7 days apart.
   - Sets `Active Matchweek = 1` and `Live Season = ON`, and saves both the Multiplier and Matches/Week settings.
 - **When to use:** Once at the start of the season, right after teams have finished naming themselves in Phase 4.
 - **Warning:** **Do not click this mid-season** — it wipes all played matches and stats. To change the weekly pace mid-season without losing data, use **Step C → Set Pace** instead.
 
 ---
 
-### Step C: Weekly Cycle & Friday Auto-Draws
+### Step C: Weekly Cycle & Auto-Draws
 
 #### 1. Active Matchweek (`Set MW`)
 - **What it does:** Controls which matchweek is shown as "Current Week" on the phase banner, All Fixtures, and on players' **Dashboard (`My Active Matchweek Fixtures`)**.
-- **When to use:** At the start of each new week (e.g., after Friday midnight or once the current week's games finish), change `1` → `2` → `3` and click **Set MW**.
+- **Automatic advancement:** When `Live Season = ON`, **Active Matchweek** automatically advances to the next matchweek as soon as all matches in the current week pass their cutoff deadline.
+- **When to use manually:** If you want to jump to a specific matchweek early or roll back a week, enter the number and click **Set MW**.
 
-#### 2. Matches Per Team Per Week (`Set Pace`)
+#### 2. Week End Cutoff (IST) (`Save Cutoff`)
+- **What it does:** Lets you choose the weekly cutoff **Day** (Monday–Sunday) and **Time in IST** (default: **Thursday `23:59:59` IST**). All calculations and database timestamps are still stored in **UTC**, while the UI accepts IST for convenience.
+- **How updates apply:** Clicking **Save Cutoff** immediately updates the deadlines for the **Active Matchweek** and **all future matchweeks** (`>= Active Matchweek`), while leaving **past matchweeks untouched**.
+- **When to use:** Whenever you want to shift the weekly deadline day/time (including mid-season for an ongoing tournament, without needing any manual database script).
+
+#### 3. Matches Per Team Per Week (`Set Pace`)
 - **What it does:** Updates the tournament's weekly pace (`1`–`10` matches per team per week) and **automatically reschedules all remaining unplayed matchweeks** without deleting any data.
 - **How mid-season changes work:**
   - **Completed matchweeks** (before Active Matchweek) are **never touched**.
   - **In-progress matchweeks** (any week that already has at least one `Submitted`, `Accepted`, `Disputed`, or `Auto-Drawn` match) are **kept intact** so teams aren't disrupted mid-week.
-  - **All remaining unplayed matchweeks** are repacked to the new pace with updated Friday deadlines.
+  - **All remaining unplayed matchweeks** are repacked to the new pace with updated weekly deadlines.
   - **Example:** You start the tournament at `2` matches/week. After Matchweek 1 is done, you set `Active Matchweek = 2` and change `Matches Per Team Per Week` to `1` and click **Set Pace**. Matchweek 1 keeps its 2 matches per team, and Matchweek 2 onward becomes 1 match per team per week for the rest of the tournament (until you change it again).
 - **Persistence:** Saved in the database, so it survives server restarts and Render sleep/wake cycles.
 
-#### 3. Check Expired Deadlines
-- **What it does:** Scans all `Pending` matches whose Friday midnight deadline has already passed and converts them to **`0 - 0` Auto-Drawn** (1 point each).
+#### 4. Check Expired Deadlines
+- **What it does:** Scans all `Pending` matches whose weekly cutoff deadline has already passed, converts them to **`0 - 0` Auto-Drawn** (1 point each), and advances **Active Matchweek** if the current week's deadline has passed.
 - **Note:** This also runs automatically every 5 minutes in the background and whenever fixtures/standings are loaded. Use this button if you want to trigger a manual check immediately.
 
-#### 4. Force 0-0 Unplayed in MW X
-- **What it does:** Immediately assigns `0 - 0` **Auto-Drawn** to all remaining `Pending` matches up to Matchweek `X`, **even if the Friday deadline hasn't passed yet**.
+#### 5. Force 0-0 Unplayed in MW X
+- **What it does:** Immediately assigns `0 - 0` **Auto-Drawn** to all remaining `Pending` matches up to Matchweek `X`, **even if the weekly cutoff deadline hasn't passed yet**.
 - **When to use:** When you want to manually close out a matchweek early (for example, if both teams agreed they can't play or missed your custom cutoff) before advancing to the next matchweek.
 
 ---
@@ -129,7 +135,7 @@ Clicking **ON / OFF** next to any toggle takes effect immediately across the ent
 | **Accepted** | Yes | Yes | Official final result. Use this when finalizing or correcting a played match. |
 | **Submitted** | No | No | Score entered by Home team, waiting for Away team to Accept or Dispute. |
 | **Disputed** | No | No | Flagged for Admin review; appears in Section 3. |
-| **Auto-Drawn** | Yes (`0-0`, 1 pt each) | No | Unplayed match that expired past the Friday deadline. |
+| **Auto-Drawn** | Yes (`0-0`, 1 pt each) | No | Unplayed match that expired past the weekly cutoff deadline. |
 | **Pending** | No | No | Unplayed match; Home team can submit a score. *(Note: Overriding a match back to Pending currently keeps whatever numbers are in the score boxes visually until the Home team submits a new score, though it will not count in Standings.)* |
 
 ---

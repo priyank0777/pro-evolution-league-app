@@ -14,6 +14,8 @@ DEFAULT_SYSTEM_SETTINGS = {
     "round_robin_multiplier": "2",
     "matches_per_week": "1",
     "current_matchweek": "1",
+    "week_end_day": "3",
+    "week_end_time_ist": "23:59:59",
     "track_points": "true",
     "track_goals": "true",
     "track_assists": "true",

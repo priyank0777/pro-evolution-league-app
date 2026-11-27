@@ -2,28 +2,53 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
+from app.auth import get_system_settings_model, update_system_setting
 from app.models import Match, MatchStat, MatchStatus, Team
 
+IST = timezone(timedelta(hours=5, minutes=30))
 
-def compute_next_friday_midnight(reference_dt: Optional[datetime] = None) -> datetime:
+
+def _ensure_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def parse_ist_time(time_str: str) -> tuple[int, int, int]:
+    """Parse an HH:MM or HH:MM:SS string into (hour, minute, second)."""
+    parts = [int(p) for p in time_str.strip().split(":")]
+    if len(parts) == 2:
+        return parts[0], parts[1], 0
+    if len(parts) == 3:
+        return parts[0], parts[1], parts[2]
+    raise ValueError(f"Invalid IST time format: {time_str}")
+
+
+def compute_next_thursday_midnight(
+    reference_dt: Optional[datetime] = None,
+    cutoff_day: int = 3,
+    cutoff_time_ist: str = "23:59:59",
+) -> datetime:
     """
-    Calculate the upcoming Friday 23:59:59 UTC deadline for Matchweek 1.
-    A matchweek runs Friday to Friday (inclusive).
+    Calculate the upcoming week-end cutoff deadline in IST (returned in UTC)
+    for Matchweek 1. Defaults to Thursday (3) 23:59:59 IST.
     """
-    now = reference_dt or datetime.now(timezone.utc)
+    hour, minute, second = parse_ist_time(cutoff_time_ist)
+    now = reference_dt or datetime.now(IST)
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
+    now_ist = now.astimezone(IST)
 
-    # weekday(): Monday=0 ... Friday=4, Saturday=5, Sunday=6
-    days_until_friday = (4 - now.weekday()) % 7
-    if days_until_friday == 0:
-        # If generated on a Friday, Matchweek 1 runs from today until next Friday midnight
-        days_until_friday = 7
+    # weekday(): Monday=0 ... Thursday=3, Friday=4, Saturday=5, Sunday=6
+    days_until = (cutoff_day - now_ist.weekday()) % 7
+    if days_until == 0:
+        # If generated on the cutoff day, Matchweek 1 runs until next week's cutoff
+        days_until = 7
 
-    first_friday = (now + timedelta(days=days_until_friday)).replace(
-        hour=23, minute=59, second=59, microsecond=0
+    first_cutoff_ist = (now_ist + timedelta(days=days_until)).replace(
+        hour=hour, minute=minute, second=second, microsecond=0
     )
-    return first_friday
+    return first_cutoff_ist.astimezone(timezone.utc)
 
 
 def generate_round_robin_fixtures(
@@ -79,7 +104,11 @@ def generate_round_robin_fixtures(
         # Rotate all elements except the first fixed pivot element
         rotation = [rotation[0]] + [rotation[-1]] + rotation[1:-1]
 
-    mw1_deadline = start_friday_deadline or compute_next_friday_midnight()
+    sys_settings = get_system_settings_model(db)
+    mw1_deadline = start_friday_deadline or compute_next_thursday_midnight(
+        cutoff_day=sys_settings.week_end_day,
+        cutoff_time_ist=sys_settings.week_end_time_ist,
+    )
     created_matches: List[Match] = []
     global_round_idx = 0
 
@@ -174,7 +203,11 @@ def reschedule_remaining_fixtures(
                 days=7 * (start_mw - last_prev.matchweek)
             )
         else:
-            anchor_deadline = compute_next_friday_midnight()
+            sys_settings = get_system_settings_model(db)
+            anchor_deadline = compute_next_thursday_midnight(
+                cutoff_day=sys_settings.week_end_day,
+                cutoff_time_ist=sys_settings.week_end_time_ist,
+            )
 
     # Reconstruct individual Berger rounds (each team plays at most once per round)
     rounds: List[List[Match]] = []
@@ -211,6 +244,89 @@ def reschedule_remaining_fixtures(
     }
 
 
+def apply_cutoff_to_upcoming_matchweeks(
+    db: Session,
+    cutoff_day: int,
+    cutoff_time_ist: str,
+    current_matchweek: int,
+) -> int:
+    """
+    Update deadlines (stored in UTC) for all matches in `current_matchweek` and
+    future matchweeks (>= current_matchweek) to the specified IST weekday and time.
+    Past matchweeks (< current_matchweek) are untouched.
+    """
+    hour, minute, second = parse_ist_time(cutoff_time_ist)
+    matches = (
+        db.query(Match)
+        .filter(Match.matchweek >= current_matchweek)
+        .order_by(Match.matchweek.asc(), Match.id.asc())
+        .all()
+    )
+    if not matches:
+        return 0
+
+    fallback_anchor = compute_next_thursday_midnight(
+        cutoff_day=cutoff_day,
+        cutoff_time_ist=cutoff_time_ist,
+    )
+    updated_count = 0
+
+    for m in matches:
+        if m.deadline is not None:
+            dl_ist = _ensure_utc(m.deadline).astimezone(IST)
+            week_monday = dl_ist.replace(hour=hour, minute=minute, second=second, microsecond=0) - timedelta(
+                days=dl_ist.weekday()
+            )
+            new_deadline_utc = (week_monday + timedelta(days=cutoff_day)).astimezone(timezone.utc)
+        else:
+            new_deadline_utc = fallback_anchor + timedelta(days=7 * (m.matchweek - current_matchweek))
+
+        m.deadline = new_deadline_utc
+        updated_count += 1
+
+    db.commit()
+    return updated_count
+
+
+def _advance_matchweek_if_expired(db: Session, now: datetime) -> bool:
+    """
+    Advance `current_matchweek` in SystemSettings when `season_live` is enabled
+    and all matches in the current matchweek have passed their deadline.
+    Returns True if `current_matchweek` was updated.
+    """
+    sys_settings = get_system_settings_model(db)
+    if not sys_settings.season_live:
+        return False
+
+    current_mw = sys_settings.current_matchweek
+    advanced = False
+
+    while True:
+        mw_matches = db.query(Match).filter(Match.matchweek == current_mw).all()
+        if not mw_matches:
+            break
+        all_expired = all(
+            m.deadline is not None and now > _ensure_utc(m.deadline)
+            for m in mw_matches
+        )
+        if not all_expired:
+            break
+
+        has_next_mw = (
+            db.query(Match.id).filter(Match.matchweek == current_mw + 1).first()
+            is not None
+        )
+        if not has_next_mw:
+            break
+
+        current_mw += 1
+        advanced = True
+
+    if advanced:
+        update_system_setting(db, "current_matchweek", str(current_mw))
+    return advanced
+
+
 def enforce_expired_match_deadlines(
     db: Session,
     up_to_matchweek: Optional[int] = None,
@@ -218,8 +334,9 @@ def enforce_expired_match_deadlines(
 ) -> int:
     """
     Assign a 0-0 draw (status = AUTO_DRAWN) to unplayed (PENDING) matches:
-    - Automatically when their Friday midnight deadline has passed, OR
+    - Automatically when their Thursday 23:59:59 IST deadline has passed, OR
     - Immediately for a specified matchweek when triggered by the Admin.
+    Also advances `current_matchweek` when the active matchweek's deadline passes.
     Returns the number of matches converted to AUTO_DRAWN.
     """
     now = datetime.now(timezone.utc)
@@ -232,9 +349,7 @@ def enforce_expired_match_deadlines(
     auto_drawn_count = 0
 
     for match in pending_matches:
-        deadline = match.deadline
-        if deadline is not None and deadline.tzinfo is None:
-            deadline = deadline.replace(tzinfo=timezone.utc)
+        deadline = _ensure_utc(match.deadline) if match.deadline is not None else None
 
         is_expired = deadline is not None and now > deadline
         if force_all_pending_in_matchweek or is_expired:
@@ -244,7 +359,13 @@ def enforce_expired_match_deadlines(
             match.verified_at = now
             auto_drawn_count += 1
 
-    if auto_drawn_count > 0:
+    advanced = (
+        _advance_matchweek_if_expired(db, now)
+        if not force_all_pending_in_matchweek
+        else False
+    )
+
+    if auto_drawn_count > 0 or advanced:
         db.commit()
 
     return auto_drawn_count

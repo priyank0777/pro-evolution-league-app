@@ -420,7 +420,7 @@ const app = {
                 <p class="text-xs text-slate-400 mt-0.5">
                     ${this.settings && this.settings.preferences_open && !this.user.is_admin
                         ? `<button onclick="app.navigate('preferences')" class="text-blue-400 hover:underline font-semibold">Submit Partner Preferences &rarr;</button>`
-                        : `${this.settings ? (this.settings.matches_per_week || 1) : 1} match${this.settings && (this.settings.matches_per_week || 1) > 1 ? 'es' : ''}/team/week • Friday-to-Friday Cycle`}
+                        : `${this.settings ? (this.settings.matches_per_week || 1) : 1} match${this.settings && (this.settings.matches_per_week || 1) > 1 ? 'es' : ''}/team/week • ${this.formatWeekCutoffLabel()}`}
                 </p>
             </div>
         `;
@@ -805,7 +805,7 @@ const app = {
                             Matchweek ${mw}
                             ${this.settings && Number(mw) === this.settings.current_matchweek ? '<span class="ml-2 text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Current Week</span>' : ''}
                         </h3>
-                        <span class="text-xs text-slate-400">Friday Midnight Deadline: ${this.formatDate(grouped[mw][0].deadline)}</span>
+                        <span class="text-xs text-slate-400">Cutoff (${this.formatWeekCutoffLabel()}): ${this.formatDate(grouped[mw][0].deadline)}</span>
                     </div>
                     <div class="space-y-3">
                         ${grouped[mw].map(m => this.renderMatchCard(m, false)).join('')}
@@ -1268,16 +1268,34 @@ const app = {
                 </button>
             </div>
 
-            <!-- Step C: Active Matchweek & Friday Auto-Draw -->
+            <!-- Step C: Active Matchweek & Weekly Cutoff -->
             <div class="rounded-xl bg-slate-950/80 border border-slate-800 p-4 space-y-3">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="text-xs font-bold uppercase text-amber-400">Step C: Weekly Cycle & Friday Auto-Draws</span>
+                    <span class="text-xs font-bold uppercase text-amber-400">Step C: Weekly Cycle & Auto-Draws</span>
                     <div class="flex items-center gap-2">
                         <label class="text-xs text-slate-400">Active Matchweek:</label>
                         <input id="admin-current-mw-input" type="number" min="1" value="${s.current_matchweek}"
                             class="w-16 rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-xs font-mono-num text-center text-white" />
                         <button onclick="app.adminUpdateMatchweek()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-emerald-400">
                             Set MW
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/70">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-200">Week End Cutoff (IST)</p>
+                        <p class="text-[11px] text-slate-400">Stored in UTC; updates Matchweek ${s.current_matchweek} and all future matchweeks.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="admin-week-end-day" class="rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-xs text-white">
+                            ${['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                                .map((dayName, idx) => `<option value="${idx}" ${(s.week_end_day ?? 3) === idx ? 'selected' : ''}>${dayName}</option>`)
+                                .join('')}
+                        </select>
+                        <input id="admin-week-end-time" type="time" step="1" value="${s.week_end_time_ist || '23:59:59'}"
+                            class="rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-xs font-mono-num text-white" />
+                        <button onclick="app.adminUpdateWeekCutoff()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-emerald-400">
+                            Save Cutoff
                         </button>
                     </div>
                 </div>
@@ -1334,6 +1352,35 @@ const app = {
                 }),
             });
             this.toast(res.detail, 'success');
+            await this.loadAdminDashboard();
+        } catch (err) {
+            this.toast(err.message, 'error');
+        }
+    },
+
+    formatWeekCutoffLabel() {
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const dayIdx = this.settings && this.settings.week_end_day !== undefined ? this.settings.week_end_day : 3;
+        const timeStr = (this.settings && this.settings.week_end_time_ist) || '23:59:59';
+        return `${days[dayIdx] || 'Thu'} ${timeStr} IST`;
+    },
+
+    async adminUpdateWeekCutoff() {
+        const day = parseInt(document.getElementById('admin-week-end-day').value, 10);
+        const timeStr = document.getElementById('admin-week-end-time').value;
+        if (isNaN(day) || day < 0 || day > 6 || !timeStr) {
+            this.toast('Please select a valid cutoff day and IST time.', 'error');
+            return;
+        }
+        try {
+            this.settings = await this.api('/api/admin/settings', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    week_end_day: day,
+                    week_end_time_ist: timeStr,
+                }),
+            });
+            this.toast(`Updated week-end cutoff to ${this.formatWeekCutoffLabel()}.`, 'success');
             await this.loadAdminDashboard();
         } catch (err) {
             this.toast(err.message, 'error');

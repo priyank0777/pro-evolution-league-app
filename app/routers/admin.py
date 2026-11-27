@@ -23,6 +23,7 @@ from app.schemas import (
 )
 from app.services.matchmaking import run_partner_matchmaking
 from app.services.scheduler import (
+    apply_cutoff_to_upcoming_matchweeks,
     enforce_expired_match_deadlines,
     generate_round_robin_fixtures,
     reschedule_remaining_fixtures,
@@ -60,6 +61,13 @@ def admin_update_settings(
         reschedule_remaining_fixtures(
             db,
             matches_per_week=updated_settings.matches_per_week,
+            current_matchweek=updated_settings.current_matchweek,
+        )
+    if "week_end_day" in updates or "week_end_time_ist" in updates:
+        apply_cutoff_to_upcoming_matchweeks(
+            db,
+            cutoff_day=updated_settings.week_end_day,
+            cutoff_time_ist=updated_settings.week_end_time_ist,
             current_matchweek=updated_settings.current_matchweek,
         )
 
@@ -207,7 +215,7 @@ def admin_process_auto_draws(
     db: Session = Depends(get_db),
 ):
     """
-    Enforce Friday midnight deadlines (assigning 0-0 AUTO_DRAWN to unplayed matches).
+    Enforce Thursday 23:59:59 IST deadlines (assigning 0-0 AUTO_DRAWN to unplayed matches).
     If `force_matchweek=true` and `matchweek` is provided, immediately assigns 0-0
     draws to all remaining unplayed matches in that matchweek.
     """

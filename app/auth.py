@@ -118,6 +118,8 @@ def get_system_settings_model(db: Session) -> SystemSettingsOut:
         round_robin_multiplier=as_int("round_robin_multiplier", 2),
         matches_per_week=as_int("matches_per_week", 1),
         current_matchweek=as_int("current_matchweek", 1),
+        week_end_day=as_int("week_end_day", 3),
+        week_end_time_ist=raw.get("week_end_time_ist", "23:59:59"),
         track_points=as_bool("track_points", True),
         track_goals=as_bool("track_goals", True),
         track_assists=as_bool("track_assists", True),

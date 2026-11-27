@@ -16,7 +16,7 @@ STATIC_DIR = BASE_DIR / "static"
 
 
 def scheduled_auto_draw_job():
-    """Background task to automatically assign 0-0 draws to matches past Friday midnight."""
+    """Background task to automatically assign 0-0 draws and advance matchweek past Thursday 23:59:59 IST."""
     db = SessionLocal()
     try:
         enforce_expired_match_deadlines(db)
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
         db.close()
 
     scheduler = BackgroundScheduler()
-    scheduler.add_job(scheduled_auto_draw_job, "interval", minutes=5, id="friday_auto_draw")
+    scheduler.add_job(scheduled_auto_draw_job, "interval", minutes=5, id="thursday_auto_draw")
     scheduler.start()
     try:
         yield

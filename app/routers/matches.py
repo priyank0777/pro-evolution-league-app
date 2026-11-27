@@ -83,7 +83,7 @@ def list_all_matches(
 ):
     """
     Return the season's fixtures separated or filtered by matchweek.
-    Automatically enforces Friday midnight 0-0 auto-draws on expired pending matches.
+    Automatically enforces Thursday 23:59:59 IST 0-0 auto-draws on expired pending matches.
     """
     enforce_expired_match_deadlines(db)
 

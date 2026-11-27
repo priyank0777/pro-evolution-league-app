@@ -1,6 +1,7 @@
 from datetime import datetime
+import re
 from typing import Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models import MatchStatus
 
@@ -180,6 +181,8 @@ class SystemSettingsOut(BaseModel):
     round_robin_multiplier: int
     matches_per_week: int
     current_matchweek: int
+    week_end_day: int
+    week_end_time_ist: str
     track_points: bool
     track_goals: bool
     track_assists: bool
@@ -193,9 +196,22 @@ class SystemSettingsUpdateIn(BaseModel):
     round_robin_multiplier: Optional[int] = Field(default=None, ge=1, le=10)
     matches_per_week: Optional[int] = Field(default=None, ge=1, le=10)
     current_matchweek: Optional[int] = Field(default=None, ge=1)
+    week_end_day: Optional[int] = Field(default=None, ge=0, le=6)
+    week_end_time_ist: Optional[str] = None
     track_points: Optional[bool] = None
     track_goals: Optional[bool] = None
     track_assists: Optional[bool] = None
+
+    @field_validator("week_end_time_ist")
+    @classmethod
+    def validate_ist_time(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        m = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?", v.strip())
+        if not m:
+            raise ValueError("week_end_time_ist must be in HH:MM or HH:MM:SS (24-hour) format.")
+        hh, mm, ss = m.group(1), m.group(2), m.group(3) or "00"
+        return f"{hh}:{mm}:{ss}"
 
 
 class GenerateFixturesIn(BaseModel):
