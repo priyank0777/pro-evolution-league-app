@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
-from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -15,18 +14,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "static"
 
 
-def scheduled_auto_draw_job():
-    """Background task to automatically assign 0-0 draws and advance matchweek past Thursday 23:59:59 IST."""
-    db = SessionLocal()
-    try:
-        enforce_expired_match_deadlines(db)
-    finally:
-        db.close()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database schema, seed Admin + SystemSettings, and start deadline scheduler."""
+    """Initialize database schema, seed Admin + SystemSettings, and enforce expired match deadlines on startup."""
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -34,14 +24,7 @@ async def lifespan(app: FastAPI):
         enforce_expired_match_deadlines(db)
     finally:
         db.close()
-
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(scheduled_auto_draw_job, "interval", minutes=5, id="thursday_auto_draw")
-    scheduler.start()
-    try:
-        yield
-    finally:
-        scheduler.shutdown(wait=False)
+    yield
 
 
 app = FastAPI(

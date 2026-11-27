@@ -469,22 +469,9 @@ const app = {
             }
         }
 
-        const statsHtml = m.player_stats && m.player_stats.length
-            ? `
-                <div class="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    ${m.player_stats.map(st => `
-                        <div class="flex items-center justify-between rounded-lg bg-slate-950/70 px-3 py-1.5 border border-slate-800/60">
-                            <span class="font-medium text-slate-300">${this.escapeHtml(st.user_name)} <span class="text-slate-500">@${this.escapeHtml(st.efootball_username)}</span></span>
-                            <span class="font-mono-num text-slate-200 flex items-center gap-2">
-                                ${this.settings.track_points ? `<span class="text-emerald-400 font-bold">${st.total_points} pts</span>` : ''}
-                                ${this.settings.track_goals ? `<span>⚽ ${st.goals}</span>` : ''}
-                                ${this.settings.track_assists ? `<span>🅰️ ${st.assists}</span>` : ''}
-                            </span>
-                        </div>
-                    `).join('')}
-                </div>
-            `
-            : '';
+        const statsByUserId = Object.fromEntries((m.player_stats || []).map(st => [st.user_id, st]));
+        const homeStatsHtml = this.renderTeamPlayerStats(m.home_players, statsByUserId, { reverseOnMd: true });
+        const awayStatsHtml = this.renderTeamPlayerStats(m.away_players, statsByUserId);
 
         return `
             <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5 transition hover:border-slate-700">
@@ -498,7 +485,7 @@ const app = {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-7 items-center gap-4 py-2">
+                <div class="grid grid-cols-1 md:grid-cols-7 items-start gap-4 py-2">
                     <!-- Home Team -->
                     <div class="md:col-span-3 flex flex-col md:items-end text-left md:text-right">
                         <div class="flex items-center gap-2 md:flex-row-reverse">
@@ -508,10 +495,11 @@ const app = {
                         <p class="text-xs text-slate-400 mt-0.5">
                             ${m.home_players.map(p => `${this.escapeHtml(p.name)} (@${this.escapeHtml(p.efootball_username)})`).join(' & ')}
                         </p>
+                        ${homeStatsHtml}
                     </div>
 
                     <!-- Score Pill -->
-                    <div class="md:col-span-1 flex items-center justify-center">
+                    <div class="md:col-span-1 flex items-center justify-center md:pt-1">
                         <div class="px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 font-mono-num text-xl font-extrabold text-white tracking-wider">
                             ${hasScore ? `${m.home_score} - ${m.away_score}` : 'vs'}
                         </div>
@@ -526,10 +514,9 @@ const app = {
                         <p class="text-xs text-slate-400 mt-0.5">
                             ${m.away_players.map(p => `${this.escapeHtml(p.name)} (@${this.escapeHtml(p.efootball_username)})`).join(' & ')}
                         </p>
+                        ${awayStatsHtml}
                     </div>
                 </div>
-
-                ${statsHtml}
 
                 ${actionHtml ? `<div class="mt-4 pt-3 border-t border-slate-800 flex justify-end">${actionHtml}</div>` : ''}
             </div>
@@ -1097,7 +1084,37 @@ const app = {
         }
     },
 
+    /**
+     * Render player stat rows for a single team, ordered by its roster.
+     */
+    renderTeamPlayerStats(players, statsByUserId, { reverseOnMd = false } = {}) {
+        const teamStats = (players || []).map(p => statsByUserId[p.id]).filter(Boolean);
+        if (!teamStats.length) return '';
+
+        const s = this.settings || { track_points: true, track_goals: true, track_assists: true };
+        const rowDir = reverseOnMd ? ' md:flex-row-reverse' : '';
+
+        return `
+            <div class="mt-2.5 w-full space-y-1.5 text-xs">
+                ${teamStats.map(st => `
+                    <div class="flex items-center justify-between${rowDir} rounded-lg bg-slate-950/70 px-3 py-1.5 border border-slate-800/60">
+                        <span class="font-medium text-slate-300">${this.escapeHtml(st.user_name)} <span class="text-slate-500">@${this.escapeHtml(st.efootball_username)}</span></span>
+                        <span class="font-mono-num text-slate-200 flex items-center gap-2">
+                            ${s.track_points ? `<span class="text-emerald-400 font-bold">${st.total_points} pts</span>` : ''}
+                            ${s.track_goals ? `<span>⚽ ${st.goals}</span>` : ''}
+                            ${s.track_assists ? `<span>🅰️ ${st.assists}</span>` : ''}
+                        </span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    },
+
     openVerifyModal(match) {
+        const statsByUserId = Object.fromEntries((match.player_stats || []).map(st => [st.user_id, st]));
+        const homeStatsHtml = this.renderTeamPlayerStats(match.home_players, statsByUserId);
+        const awayStatsHtml = this.renderTeamPlayerStats(match.away_players, statsByUserId);
+
         const body = document.getElementById('modal-verify-body');
         body.innerHTML = `
             <div class="rounded-xl border border-slate-800 bg-slate-950 p-4 text-center">
@@ -1109,16 +1126,26 @@ const app = {
                 </div>
             </div>
 
-            <div class="space-y-2">
+            <div class="space-y-3">
                 <p class="text-xs font-bold uppercase text-slate-400">Submitted Individual Player Stats</p>
-                ${(match.player_stats || []).map(st => `
-                    <div class="flex items-center justify-between rounded-lg bg-slate-950 px-3 py-2 border border-slate-800 text-xs">
-                        <span class="font-semibold text-white">${this.escapeHtml(st.user_name)} <span class="text-slate-500">@${this.escapeHtml(st.efootball_username)}</span></span>
-                        <span class="font-mono-num text-slate-300">
-                            <strong class="text-emerald-400">${st.total_points} pts</strong> • ⚽ ${st.goals} • 🅰️ ${st.assists}
-                        </span>
+                ${homeStatsHtml ? `
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">HOME</span>
+                            <span class="text-xs font-bold text-white">${this.escapeHtml(match.home_team_name)}</span>
+                        </div>
+                        ${homeStatsHtml}
                     </div>
-                `).join('')}
+                ` : ''}
+                ${awayStatsHtml ? `
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">AWAY</span>
+                            <span class="text-xs font-bold text-white">${this.escapeHtml(match.away_team_name)}</span>
+                        </div>
+                        ${awayStatsHtml}
+                    </div>
+                ` : ''}
             </div>
 
             <div class="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800">

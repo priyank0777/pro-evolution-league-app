@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, get_system_settings_model, get_user_team
+from app.cache import get_cached, invalidate, invalidate_prefix, set_cached
 from app.database import get_db
 from app.models import Match, MatchStat, MatchStatus, Team, User
 from app.schemas import (
@@ -14,7 +15,7 @@ from app.schemas import (
     PlayerStatOut,
     UserPublicOut,
 )
-from app.services.scheduler import enforce_expired_match_deadlines
+from app.services.scheduler import enforce_expired_match_deadlines_if_needed
 
 router = APIRouter(prefix="/api/matches", tags=["Matches"])
 
@@ -85,7 +86,15 @@ def list_all_matches(
     Return the season's fixtures separated or filtered by matchweek.
     Automatically enforces Thursday 23:59:59 IST 0-0 auto-draws on expired pending matches.
     """
-    enforce_expired_match_deadlines(db)
+    enforce_expired_match_deadlines_if_needed(db)
+
+    mw_key = str(matchweek) if matchweek is not None else "all"
+    status_key = status_filter.value if status_filter is not None else "all"
+    cache_key = f"matches:{mw_key}:{status_key}"
+
+    hit, cached, ver = get_cached(cache_key)
+    if hit:
+        return cached
 
     query = db.query(Match)
     if matchweek is not None:
@@ -101,7 +110,9 @@ def list_all_matches(
         user_team_lookup[t.player1_id] = t.id
         user_team_lookup[t.player2_id] = t.id
 
-    return [serialize_match(db, m, user_team_lookup) for m in matches]
+    result = [serialize_match(db, m, user_team_lookup) for m in matches]
+    set_cached(cache_key, result, ver)
+    return result
 
 
 @router.get("/my-current", response_model=List[MatchOut])
@@ -113,10 +124,15 @@ def get_my_current_matches(
     Return the current matchweek's fixtures involving the authenticated user's team,
     plus any unverified (submitted/disputed) fixtures from earlier matchweeks requiring action.
     """
-    enforce_expired_match_deadlines(db)
+    enforce_expired_match_deadlines_if_needed(db)
     team = get_user_team(db, current_user.id)
     if not team:
         return []
+
+    cache_key = f"my_current:{team.id}"
+    hit, cached, ver = get_cached(cache_key)
+    if hit:
+        return cached
 
     sys_settings = get_system_settings_model(db)
     current_mw = sys_settings.current_matchweek
@@ -134,7 +150,9 @@ def get_my_current_matches(
         .all()
     )
 
-    return [serialize_match(db, m) for m in matches]
+    result = [serialize_match(db, m) for m in matches]
+    set_cached(cache_key, result, ver)
+    return result
 
 
 @router.post("/{match_id}/submit", response_model=MatchOut)
@@ -148,7 +166,7 @@ def submit_match_score(
     Home team submits the match score and individual player stats (Total Points, Goals, Assists).
     Transitions match status from PENDING (or DISPUTED) to SUBMITTED for Away team verification.
     """
-    enforce_expired_match_deadlines(db)
+    enforce_expired_match_deadlines_if_needed(db)
     sys_settings = get_system_settings_model(db)
     if not sys_settings.season_live and not current_user.is_admin:
         raise HTTPException(
@@ -213,6 +231,7 @@ def submit_match_score(
 
     db.commit()
     db.refresh(match)
+    invalidate_prefix("matches:", "my_current:")
     return serialize_match(db, match)
 
 
@@ -257,5 +276,7 @@ def verify_match_score(
 
     db.commit()
     db.refresh(match)
+    invalidate("standings", "leaderboard")
+    invalidate_prefix("matches:", "my_current:")
     return serialize_match(db, match)
 

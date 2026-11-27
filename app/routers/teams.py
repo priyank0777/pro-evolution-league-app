@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, get_system_settings_model, get_user_team
+from app.cache import clear_all_cache
 from app.database import get_db
 from app.models import Team, User
 from app.schemas import TeamOut, TeamUpdateIn, UserPublicOut
@@ -90,5 +91,6 @@ def update_my_team(
     team.leader_id = payload.leader_id
     db.commit()
     db.refresh(team)
+    clear_all_cache()
     return serialize_team(team)
 

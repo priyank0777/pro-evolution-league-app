@@ -1,11 +1,14 @@
 from datetime import datetime, timedelta, timezone
+from threading import RLock
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.auth import get_system_settings_model, update_system_setting
+from app.cache import clear_all_cache, is_deadline_passed, set_next_deadline
 from app.models import Match, MatchStat, MatchStatus, Team
 
 IST = timezone(timedelta(hours=5, minutes=30))
+_deadline_lock = RLock()
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -367,6 +370,56 @@ def enforce_expired_match_deadlines(
 
     if auto_drawn_count > 0 or advanced:
         db.commit()
+        clear_all_cache()
 
+    refresh_next_deadline(db)
     return auto_drawn_count
+
+
+def refresh_next_deadline(db: Session) -> Optional[datetime]:
+    """
+    Compute and store the earliest UTC timestamp capable of triggering either:
+    1. A PENDING match auto-draw, OR
+    2. Advancing `current_matchweek` (only when `season_live` is True and `current_matchweek + 1` exists).
+    """
+    candidates: List[datetime] = [
+        _ensure_utc(d)
+        for (d,) in db.query(Match.deadline)
+        .filter(Match.status == MatchStatus.PENDING, Match.deadline.isnot(None))
+        .all()
+    ]
+
+    sys_settings = get_system_settings_model(db)
+    if sys_settings.season_live:
+        current_mw = sys_settings.current_matchweek
+        has_next_mw = (
+            db.query(Match.id).filter(Match.matchweek == current_mw + 1).first()
+            is not None
+        )
+        if has_next_mw:
+            mw_deadlines = [
+                d
+                for (d,) in db.query(Match.deadline)
+                .filter(Match.matchweek == current_mw)
+                .all()
+            ]
+            if mw_deadlines and all(d is not None for d in mw_deadlines):
+                candidates.append(max(_ensure_utc(d) for d in mw_deadlines))
+
+    next_dl = min(candidates) if candidates else None
+    set_next_deadline(next_dl)
+    return next_dl
+
+
+def enforce_expired_match_deadlines_if_needed(db: Session) -> int:
+    """
+    Fast-path wrapper that checks `is_deadline_passed()` in memory (0 DB queries)
+    and only runs `enforce_expired_match_deadlines(db)` when a cutoff has passed.
+    """
+    if not is_deadline_passed():
+        return 0
+    with _deadline_lock:
+        if not is_deadline_passed():
+            return 0
+        return enforce_expired_match_deadlines(db)
 
