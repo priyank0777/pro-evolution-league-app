@@ -7,10 +7,10 @@ from app.auth import (
     get_system_settings_model,
     serialize_user,
 )
-from app.cache import invalidate
+from app.cache import invalidate, invalidate_prefix
 from app.database import get_db
 from app.models import User
-from app.schemas import TokenResponse, UserCreate, UserLogin, UserOut
+from app.schemas import TokenResponse, UserCreate, UserLogin, UserOut, UserProfileUpdateIn
 from app.seed import hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -87,5 +87,44 @@ def get_me(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Return the authenticated user's profile and assigned team metadata."""
+    return serialize_user(db, current_user)
+
+
+@router.put("/me", response_model=UserOut)
+def update_me(
+    payload: UserProfileUpdateIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update the authenticated user's display name and/or eFootball username."""
+    if payload.name is None and payload.efootball_username is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one field to update.",
+        )
+
+    if payload.efootball_username is not None:
+        existing = (
+            db.query(User)
+            .filter(
+                User.efootball_username == payload.efootball_username,
+                User.id != current_user.id,
+            )
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An account with this eFootball username already exists.",
+            )
+        current_user.efootball_username = payload.efootball_username
+
+    if payload.name is not None:
+        current_user.name = payload.name
+
+    db.commit()
+    db.refresh(current_user)
+    invalidate("leaderboard")
+    invalidate_prefix("matches:", "my_current:")
     return serialize_user(db, current_user)
 

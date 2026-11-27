@@ -20,6 +20,18 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserProfileUpdateIn(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=100)
+    efootball_username: Optional[str] = Field(default=None, min_length=2, max_length=100)
+
+    @field_validator("name", "efootball_username", mode="before")
+    @classmethod
+    def strip_text(cls, value: Optional[str]) -> Optional[str]:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -406,6 +406,9 @@ const app = {
                 <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Player Profile</p>
                 <p class="text-lg font-extrabold text-white mt-1">${this.escapeHtml(this.user.name)}</p>
                 <p class="text-xs text-emerald-400 font-mono-num mt-0.5">@${this.escapeHtml(this.user.efootball_username)}</p>
+                <p class="text-xs text-slate-400 mt-1">
+                    <button onclick="app.openProfileModal()" class="text-emerald-400 hover:underline font-semibold">Edit Profile &rarr;</button>
+                </p>
             </div>
             <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
                 <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Assigned 2v2 Team</p>
@@ -1555,6 +1558,43 @@ const app = {
             const res = await this.api(`/api/admin/users/${userId}`, { method: 'DELETE' });
             this.toast(res.detail || `Deleted ${name}`, 'info');
             await this.loadAdminDashboard();
+        } catch (err) {
+            this.toast(err.message, 'error');
+        }
+    },
+
+    // -----------------------------------------------------------------------
+    // Profile Edit Modal
+    // -----------------------------------------------------------------------
+    openProfileModal() {
+        if (!this.user) return;
+        document.getElementById('profile-name-input').value = this.user.name || '';
+        document.getElementById('profile-efootball-input').value = this.user.efootball_username || '';
+        document.getElementById('modal-profile').classList.remove('hidden');
+    },
+
+    closeProfileModal() {
+        document.getElementById('modal-profile').classList.add('hidden');
+    },
+
+    async submitProfileUpdate(event) {
+        event.preventDefault();
+        const name = document.getElementById('profile-name-input').value.trim();
+        const efootballUsername = document.getElementById('profile-efootball-input').value.trim();
+
+        try {
+            const updated = await this.api('/api/auth/me', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    name,
+                    efootball_username: efootballUsername,
+                }),
+            });
+            this.user = updated;
+            this.updateNavigationUI();
+            this.closeProfileModal();
+            await this.loadDashboard();
+            this.toast('Profile updated successfully.', 'success');
         } catch (err) {
             this.toast(err.message, 'error');
         }
