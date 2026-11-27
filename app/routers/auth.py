@@ -7,6 +7,7 @@ from app.auth import (
     get_system_settings_model,
     serialize_user,
 )
+from app.cache import invalidate
 from app.database import get_db
 from app.models import User
 from app.schemas import TokenResponse, UserCreate, UserLogin, UserOut
@@ -51,6 +52,7 @@ def register_user(payload: UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    invalidate("leaderboard")
 
     token = create_access_token({"sub": str(new_user.id)})
     return TokenResponse(

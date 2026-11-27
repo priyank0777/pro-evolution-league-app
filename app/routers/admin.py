@@ -9,6 +9,7 @@ from app.auth import (
     serialize_user,
     update_system_setting,
 )
+from app.cache import clear_all_cache, invalidate, invalidate_prefix
 from app.database import get_db
 from app.models import Match, MatchStat, MatchStatus, Team, User
 from app.routers.matches import serialize_match
@@ -26,6 +27,7 @@ from app.services.scheduler import (
     apply_cutoff_to_upcoming_matchweeks,
     enforce_expired_match_deadlines,
     generate_round_robin_fixtures,
+    refresh_next_deadline,
     reschedule_remaining_fixtures,
 )
 
@@ -71,7 +73,9 @@ def admin_update_settings(
             current_matchweek=updated_settings.current_matchweek,
         )
 
-    return updated_settings
+    clear_all_cache()
+    enforce_expired_match_deadlines(db)
+    return get_system_settings_model(db)
 
 
 @router.get("/users", response_model=List[UserOut])
@@ -106,6 +110,8 @@ def admin_delete_user(
 
     db.delete(target)
     db.commit()
+    clear_all_cache()
+    refresh_next_deadline(db)
     return {"detail": f"Deleted user '{target.name}' (@{target.efootball_username})."}
 
 
@@ -131,6 +137,8 @@ def admin_trigger_matchmaking(
     update_system_setting(db, "preferences_open", "false")
     update_system_setting(db, "team_setup_open", "true")
     db.commit()
+    clear_all_cache()
+    refresh_next_deadline(db)
 
     return {
         "detail": f"Successfully paired {len(teams) * 2} players into {len(teams)} teams using {algorithm_used}.",
@@ -193,6 +201,8 @@ def admin_generate_season_fixtures(
     update_system_setting(db, "current_matchweek", "1")
     update_system_setting(db, "season_live", "true")
     db.commit()
+    clear_all_cache()
+    refresh_next_deadline(db)
 
     max_mw = max((m.matchweek for m in matches), default=1)
     return {
@@ -304,5 +314,8 @@ def admin_override_match(
 
     db.commit()
     db.refresh(match)
+    invalidate("standings", "leaderboard")
+    invalidate_prefix("matches:", "my_current:")
+    refresh_next_deadline(db)
     return serialize_match(db, match)
 

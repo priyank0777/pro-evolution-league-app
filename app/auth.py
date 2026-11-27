@@ -6,6 +6,7 @@ from jose import JWTError, jwt
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.cache import get_cached, invalidate, set_cached
 from app.config import settings
 from app.database import get_db
 from app.models import SystemSetting, Team, User
@@ -95,6 +96,10 @@ def get_system_settings_dict(db: Session) -> Dict[str, str]:
 
 def get_system_settings_model(db: Session) -> SystemSettingsOut:
     """Parse system_settings rows into a strongly-typed SystemSettingsOut schema."""
+    hit, cached_val, ver = get_cached("system_settings")
+    if hit:
+        return cached_val
+
     raw = get_system_settings_dict(db)
 
     def as_bool(key: str, default: bool = False) -> bool:
@@ -110,7 +115,7 @@ def get_system_settings_model(db: Session) -> SystemSettingsOut:
         except ValueError:
             return default
 
-    return SystemSettingsOut(
+    result = SystemSettingsOut(
         registration_open=as_bool("registration_open", True),
         preferences_open=as_bool("preferences_open", False),
         team_setup_open=as_bool("team_setup_open", False),
@@ -124,13 +129,16 @@ def get_system_settings_model(db: Session) -> SystemSettingsOut:
         track_goals=as_bool("track_goals", True),
         track_assists=as_bool("track_assists", True),
     )
+    set_cached("system_settings", result, ver)
+    return result
 
 
 def update_system_setting(db: Session, key: str, value: str) -> None:
-    """Upsert a single system setting key-value pair."""
+    """Upsert a single system setting key-value pair and invalidate cached settings."""
     row = db.query(SystemSetting).filter(SystemSetting.key == key).first()
     if row:
         row.value = str(value)
     else:
         db.add(SystemSetting(key=key, value=str(value)))
+    invalidate("system_settings")
 
